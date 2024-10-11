@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小树洞</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f0f0;
+            background-image: url('https://images.unsplash.com/photo-1501854140801-50d01698950b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1950&q=80');
+            background-size: cover;
+            background-attachment: fixed;
+            background-position: center;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+        }
+        #welcome {
+            text-align: center;
+            font-size: 18px;
+            margin-bottom: 20px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+        }
+        #userForm, #postForm {
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .post {
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .post img {
+            max-width: 100%;
+            height: auto;
+            margin-top: 10px;
+        }
+        .replies {
+            margin-top: 10px;
+            padding-left: 20px;
+            border-left: 2px solid #ddd;
+        }
+        .reply {
+            margin-bottom: 5px;
+        }
+        #imagePreview {
+            max-width: 100%;
+            max-height: 200px;
+            margin-top: 10px;
+            display: none;
+        }
+        #uploadProgress {
+            width: 100%;
+            display: none;
+        }
+        #welcomeAnimation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            text-align: center;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="welcomeAnimation">欢迎您光临此地，善语结善缘，恶语伤人心哦</div>
+    <h1>小树洞</h1>
+    <div id="welcome"></div>
+    <div id="userForm" style="display:none;">
+        <input type="text" id="username" placeholder="请输入你的名字">
+        <button onclick="setUsername()">确定</button>
+    </div>
+    <div id="postForm" style="display:none;">
+        <textarea id="message" placeholder="写下你的留言..."></textarea>
+        <input type="file" id="image" accept="image/*" onchange="previewImage(event)">
+        <img id="imagePreview">
+        <progress id="uploadProgress" value="0" max="100"></progress>
+        <button onclick="submitPost()">发布</button>
+    </div>
+    <div id="posts"></div>
+
+    <script>
+        // 初始化数据
+        let posts = JSON.parse(localStorage.getItem('posts')) || [];
+        let username = localStorage.getItem('username') || '';
+
+        // 当页面加载时显示欢迎信息和已有的帖子
+        window.onload = function() {
+            document.getElementById('welcome').innerText = "李远涛欢迎你光临小树洞";
+            if (username) {
+                document.getElementById('postForm').style.display = 'block';
+            } else {
+                document.getElementById('userForm').style.display = 'block';
+            }
+            renderPosts();
+            
+            // 显示欢迎动画
+            setTimeout(() => {
+                document.getElementById('welcomeAnimation').style.display = 'none';
+            }, 3000);
+        }
+
+        function setUsername() {
+            username = document.getElementById('username').value;
+            if (username) {
+                localStorage.setItem('username', username);
+                document.getElementById('userForm').style.display = 'none';
+                document.getElementById('postForm').style.display = 'block';
+            }
+        }
+
+        function previewImage(event) {
+            const file = event.target.files[0];
+            if (file) {
+                // 检查文件大小 (限制为 5MB)
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('图片大小不能超过5MB');
+                    event.target.value = '';
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const preview = document.getElementById('imagePreview');
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function submitPost() {
+            const message = document.getElementById('message').value;
+            const image = document.getElementById('image').files[0];
+            const time = new Date().toISOString();
+
+            if (message || image) {
+                const newPost = { id: Date.now(), username, message, time, replies: [] };
+                if (image) {
+                    const reader = new FileReader();
+                    reader.onloadend = function() {
+                        newPost.image = reader.result;
+                        addPost(newPost);
+                    }
+                    reader.onprogress = function(e) {
+                        if (e.lengthComputable) {
+                            const progress = document.getElementById('uploadProgress');
+                            progress.style.display = 'block';
+                            progress.value = (e.loaded / e.total) * 100;
+                        }
+                    }
+                    reader.readAsDataURL(image);
+                } else {
+                    addPost(newPost);
+                }
+            }
+        }
+
+        function addPost(post) {
+            posts.unshift(post);
+            localStorage.setItem('posts', JSON.stringify(posts));
+            renderPosts();
+            document.getElementById('message').value = '';
+            document.getElementById('image').value = '';
+            document.getElementById('imagePreview').style.display = 'none';
+            document.getElementById('uploadProgress').style.display = 'none';
+            document.getElementById('uploadProgress').value = 0;
+        }
+
+        function renderPosts() {
+            const postsContainer = document.getElementById('posts');
+            postsContainer.innerHTML = '';
+            posts.forEach((post, index) => {
+                const postElement = document.createElement('div');
+                postElement.className = 'post';
+                const postTime = new Date(post.time);
+                const canDelete = (new Date() - postTime) < 120000; // 2分钟内可以删除
+                postElement.innerHTML = `
+                    <h3>${post.username} - ${postTime.toLocaleString()}</h3>
+                    <p>${post.message}</p>
+                    ${post.image ? `<img src="${post.image}" alt="用户上传的图片">` : ''}
+                    <div class="replies">
+                        ${post.replies.map(reply => `
+                            <div class="reply">
+                                <strong>${reply.username}</strong>: ${reply.message} - ${new Date(reply.time).toLocaleString()}
+                            </div>
+                        `).join('')}
+                    </div>
+                    <input type="text" placeholder="回复...">
+                    <button onclick="reply(${index})">回复</button>
+                    ${canDelete && post.username === username ? `<button onclick="deletePost(${post.id})">删除</button>` : ''}
+                `;
+                postsContainer.appendChild(postElement);
+            });
+        }
+
+        function reply(postIndex) {
+            const post = posts[postIndex];
+            const replyInput = document.querySelectorAll('.post')[postIndex].querySelector('input[type="text"]');
+            const replyText = replyInput.value;
+            if (replyText) {
+                post.replies.push({
+                    username: username,
+                    message: replyText,
+                    time: new Date().toISOString()
+                });
+                localStorage.setItem('posts', JSON.stringify(posts));
+                renderPosts();
+            }
+        }
+
+        function deletePost(postId) {
+            posts = posts.filter(post => post.id !== postId);
+            localStorage.setItem('posts', JSON.stringify(posts));
+            renderPosts();
+        }
+
+        // 每分钟刷新一次帖子列表，以更新删除按钮的显示状态
+        setInterval(renderPosts, 60000);
+    </script>
+</body>
+</html><script>
+    // ... existing code ...
+
+    // 当页面加载时显示欢迎信息和已有的帖子
+    window.onload = function() {
+        document.getElementById('welcome').innerText = "李远涛欢迎你光临小树洞";
+        if (username) {
+            document.getElementById('postForm').style.display = 'block';
+        } else {
+            document.getElementById('userForm').style.display = 'block';
+        }
+        renderPosts();
+        
+        // 显示欢迎动画
+        setTimeout(() => {
+            document.getElementById('welcomeAnimation').style.display = 'none';
+        }, 3000);
+
+        // 每30秒刷新一次帖子列表
+        setInterval(refreshPosts, 30000);
+    }
+
+    // ... existing code ...
+
+    function refreshPosts() {
+        // 从localStorage重新加载帖子
+        posts = JSON.parse(localStorage.getItem('posts')) || [];
+        renderPosts();
+    }
+
+    // ... existing code ...
+
+    // 修改 setInterval 调用
+    // 每分钟刷新一次帖子列表，以更新删除按钮的显示状态和获取新帖子
+    setInterval(refreshPosts, 60000);
+</script>
